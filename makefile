@@ -1,15 +1,21 @@
-SOURCE += src/main.c
 SOURCE += src/worker/utils.c
 SOURCE += src/worker/worker.c
 
+TARGET = bin/worker.a
+
 OPTIONS += -std=c11 -Wall -Wextra -pedantic -Werror
-OPTIONS += -D_GNU_SOURCE -pthread -g
+OPTIONS += -D_GNU_SOURCE -pthread -O3
 OPTIONS += -Isrc/header/
 
-all: bin/main
+OBJECTS = $(SOURCE:.c=.o)
 
-bin/main: $(SOURCE)
-	gcc $(OPTIONS) $^ -o $@
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	ar scr $@ $^
 
 clean:
-	rm bin/main
+	rm -f $(TARGET) $(OBJECTS)
+
+%.o: %.c
+	gcc $(OPTIONS) -c $^ -o $@
