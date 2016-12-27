@@ -14,4 +14,6 @@
 
 bool worker_queue_task( size_t, void(*)(void*), void* );
 
+extern size_t current_worker_id;
+
 #endif
