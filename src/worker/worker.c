@@ -8,7 +8,6 @@
 #include <sys/wait.h>
 #include <DPA/worker/utils.h>
 #include <DPA/worker/worker.h>
-#include <semaphore.h>
 
 #if !defined( _POSIX_THREAD_PROCESS_SHARED ) || _POSIX_THREAD_PROCESS_SHARED == -1
 #error "_POSIX_THREAD_PROCESS_SHARED not supported"
