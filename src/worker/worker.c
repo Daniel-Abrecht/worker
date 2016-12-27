@@ -25,13 +25,13 @@ typedef struct worker_t {
   size_t index;
   size_t size;
   int pid;
+  bool exit;
   task_t task[WORKER_QUEUE_COUNT];
 } worker_t;
 
 typedef struct controller_t {
   pthread_mutex_t lock;
   size_t active_entries;
-  bool exit;
 } controller_t;
 
 SHARED_ARRAY_GLOBAL( static worker_t, worker, WORKER_COUNT );
@@ -76,10 +76,10 @@ static bool worker_spawn( void ){
 
 static void worker_run( void ){
   current_worker_id = current_worker - worker + 1;
-  while(1){
+  while( true ){
     errno_assert( pthread_mutex_lock( &current_worker->lock ) );
     while( !current_worker->size ){
-      if( controller->exit ){
+      if( current_worker->exit ){
         errno_assert( pthread_mutex_unlock( &current_worker->lock ) );
         return;
       }
@@ -116,9 +116,10 @@ static void wait_childs( void ){
   while(!( wait(0) == -1 && errno == ECHILD ));
 }
 
-static void wakup_workers(){
+static void stop_workers(){
   for( worker_t* it=worker,*end=worker+WORKER_COUNT; it<end; it++ ){
     errno_assert( pthread_mutex_lock( &it->lock ) );
+    it->exit = true;
     errno_assert( pthread_cond_broadcast( &it->cond ) );
     errno_assert( pthread_mutex_unlock( &it->lock ) );
   }
@@ -130,6 +131,8 @@ static void init( void ){
   errno_assert( pthread_mutexattr_setpshared( &m_attr, PTHREAD_PROCESS_SHARED ) );
   errno_assert( pthread_mutex_init( &controller->lock, &m_attr ) );
   errno_assert( pthread_mutexattr_destroy( &m_attr ) );
+
+  controller->active_entries = __stop_entry_list - __start_entry_list;
 }
 
 static void cleanup( void ){
@@ -152,15 +155,10 @@ int main( int argc, char* argv[] ){
 
   entry_func_t entry_point = entry_points_spawn();
   if( entry_point ){
-    errno_assert( pthread_mutex_lock( &controller->lock ) );
-    controller->active_entries++;
-    errno_assert( pthread_mutex_unlock( &controller->lock ) );
     (*entry_point)( argc, argv );
     errno_assert( pthread_mutex_lock( &controller->lock ) );
-    if( !--controller->active_entries ){
-      controller->exit = true;
-      wakup_workers();
-    }
+    if( !--controller->active_entries )
+      stop_workers();
     errno_assert( pthread_mutex_unlock( &controller->lock ) );
     return 0;
   }
@@ -195,7 +193,7 @@ bool worker_queue_task( size_t id, void(*func)(void*), void* ptr ){
   task_t* task = w->task + ( ( w->index + w->size++ ) % WORKER_QUEUE_COUNT );
   task->func = func;
   task->ptr = ptr;
-  errno_assert( pthread_cond_broadcast( &current_worker->cond ) );
+  errno_assert( pthread_cond_broadcast( &w->cond ) );
   errno_assert( pthread_mutex_unlock( &w->lock ) );
   return true;
  error:
